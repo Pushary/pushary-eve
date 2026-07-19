@@ -1,0 +1,70 @@
+{
+  "name": "@pushary/eve",
+  "version": "0.1.1",
+  "description": "Eve tools for Pushary: pause your agent until a real human approves on their phone (human-in-the-loop).",
+  "author": "Pushary <business@pushary.com>",
+  "homepage": "https://pushary.com/human-in-the-loop-eve",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pushary/pushary-eve.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build && npm run typecheck"
+  },
+  "dependencies": {
+    "@pushary/server": "^1.3.1"
+  },
+  "peerDependencies": {
+    "eve": "^0.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "eve": "^0.24.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pushary",
+    "eve",
+    "eve.dev",
+    "human-in-the-loop",
+    "hitl",
+    "agent",
+    "approval",
+    "tool",
+    "llm"
+  ],
+  "bugs": {
+    "url": "https://github.com/Pushary/pushary-eve/issues"
+  }
+}
