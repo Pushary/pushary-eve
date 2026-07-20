@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/@pushary/eve)](https://www.npmjs.com/package/@pushary/eve)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Full walkthrough: [Human-in-the-loop for Eve](https://pushary.com/human-in-the-loop-eve). Reaching your own end-users on their phones is the Pushary [Partner plan](https://pushary.com/human-in-the-loop).
+Full walkthrough: [Human-in-the-loop for Eve](https://pushary.com/human-in-the-loop-eve?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme). Reaching your own end-users on their phones is the Pushary [Partner plan](https://pushary.com/human-in-the-loop?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
 
 Human-in-the-loop for [Eve](https://eve.dev). Give your agent a tool that pauses until a real human approves on their phone, answered from the lock screen.
 
@@ -13,7 +13,7 @@ Two calls is the whole integration:
 1. `pusharyConnectPhone()` returns a link the end-user taps once to connect their phone.
 2. `pusharyAskHuman()` asks that person and blocks until they answer, with a fail-closed result.
 
-Requires the Pushary [Partner plan](https://pushary.com/agent-notifications-integration).
+Requires the Pushary [Partner plan](https://pushary.com/agent-notifications-integration?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
 
 ## Install
 
@@ -62,6 +62,11 @@ If there is no principal and no configured `externalId`, the tool throws a clear
 
 ## Under the hood
 
-Thin wrapper over [`@pushary/server`](https://www.npmjs.com/package/@pushary/server) (`enroll` + `decisions.ask`). Verified against `eve@0.24.x`; pin your `eve` version. See the [adapters guide](https://pushary.com/docs/agents/adapters).
+Thin wrapper over [`@pushary/server`](https://www.npmjs.com/package/@pushary/server) (`enroll` + `decisions.ask`). Verified against `eve@0.24.x`; pin your `eve` version. See the [adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
 
 MIT
+
+## Example
+
+A runnable example is in [`examples/`](examples).
+
