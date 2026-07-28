@@ -1,6 +1,17 @@
 import { defineTool } from 'eve/tools'
 import { createPusharyServer, type AskResult, type DecisionType } from '@pushary/server'
 
+export {
+  pusharyChannel,
+  channelExternalId,
+  decisionTypeFor,
+  optionIdForAnswer,
+  signRouting,
+  openDecisions,
+  type PusharyChannelConfig,
+  type InputRequest,
+} from './channel'
+
 export interface PusharyEveConfig {
   /** Your Pushary API key. Defaults to `process.env.PUSHARY_API_KEY`. */
   readonly apiKey?: string

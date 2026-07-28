@@ -41,6 +41,34 @@ export default pusharyConnectPhone()
 
 That is it. The agent now has `ask-human` (approve / choose / free-text, delivered to a phone, blocks until answered) and `connect-phone` (returns the one-tap connect link).
 
+## The channel
+
+The tools above are for asking on purpose. The channel covers everything Eve already pauses on: any tool gated with `approval` from `eve/tools/approval`, and the built-in `ask_question`. Eve renders those as buttons in Slack. This renders them on a phone.
+
+```ts
+// agent/channels/pushary.ts
+import { pusharyChannel } from '@pushary/eve'
+export default pusharyChannel()
+```
+
+```bash
+PUSHARY_API_KEY=pk_...sk_...
+PUSHARY_WEBHOOK_SECRET=whsec_...          # decisions.getWebhookSecret()
+PUSHARY_CALLBACK_ORIGIN=https://your-agent.vercel.app
+```
+
+Eve emits `input.requested` and parks the turn durably. The channel opens a Pushary decision carrying a signed callback URL, and nothing is held open while it waits, so an approval can sit for hours at zero idle compute. When the human taps, `POST /pushary/answer` verifies the webhook signature and the per-request routing signature, then resumes the parked turn with the matching `inputResponses` entry.
+
+Three more routes put the rest of the session on the phone:
+
+| Route | Does |
+| --- | --- |
+| `POST /pushary/message` | Send a follow-up, starting a session if there is none |
+| `POST /pushary/stop` | `cancel()` the in-flight turn, leaving history intact |
+| `POST /pushary/reset` | `reset()` the session so the next message starts clean |
+
+Options are matched back by label and then by id, so an approval resolves to Eve's `approve` or `deny` and a select resolves to the option that was tapped. Each decision carries an idempotency key derived from the session and request id, so a replayed step never asks the same person twice. A stale answer, one whose session already moved on, returns `410` rather than failing the webhook.
+
 ## Who answers
 
 By default each tool asks the **session principal**, so run user-scoped auth and each end-user is their own principal. To bind a fixed end-user (single-user agents, jobs), pass one:
@@ -62,7 +90,7 @@ If there is no principal and no configured `externalId`, the tool throws a clear
 
 ## Under the hood
 
-Thin wrapper over [`@pushary/server`](https://www.npmjs.com/package/@pushary/server) (`enroll` + `decisions.ask`). Verified against `eve@0.24.x`; pin your `eve` version. See the [adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
+Thin wrapper over [`@pushary/server`](https://www.npmjs.com/package/@pushary/server). The tools use `enroll` + `decisions.ask`; the channel uses `decisions.create` with a signed callback URL. Verified against `eve@0.27.8`. See the [adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
 
 MIT
 

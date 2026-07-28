@@ -1,0 +1,71 @@
+{
+  "name": "@pushary/eve-extension",
+  "version": "0.1.0",
+  "description": "Pushary extension for eve: ask a real human on their phone and block on a fail-closed answer.",
+  "author": "Pushary <business@pushary.com>",
+  "homepage": "https://pushary.com/human-in-the-loop-eve",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pushary/pushary-eve.git",
+    "directory": "extension"
+  },
+  "license": "MIT",
+  "type": "module",
+  "eve": {
+    "extension": {
+      "source": "./extension",
+      "dist": "./dist/extension"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.mjs"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "default": "./dist/tools/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "eve extension build",
+    "typecheck": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build && npm run typecheck"
+  },
+  "dependencies": {
+    "@pushary/eve": "^0.2.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "eve": "^0.27.8",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "eve": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pushary",
+    "eve",
+    "eve.dev",
+    "eve-extension",
+    "human-in-the-loop",
+    "hitl",
+    "approval",
+    "agent"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "bugs": {
+    "url": "https://github.com/Pushary/pushary-eve/issues"
+  }
+}
