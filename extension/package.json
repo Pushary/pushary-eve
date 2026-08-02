@@ -1,6 +1,6 @@
 {
   "name": "@pushary/eve-extension",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Pushary extension for Eve: ask a real human on their phone and block on a fail-closed answer.",
   "author": "Pushary <business@pushary.com>",
   "homepage": "https://pushary.com/human-in-the-loop-eve",
