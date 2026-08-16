@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import type { ToolContext } from 'eve/tools'
-import { pusharyAskHuman, pusharyConnectPhone, pickExternalId, answerToModelText } from './index'
+import { pusharyAskHuman, pusharyConnectPhone, pickExternalId, answerToModelText, parseAskInput } from './index'
 import type { AskResult } from '@pushary/server'
 
 interface Recorded {
@@ -165,5 +165,39 @@ describe('pusharyConnectPhone tool', () => {
     const tool = pusharyConnectPhone({ apiKey: 'pk_x.sk_y', externalId: 'fixed_user', baseUrl: 'https://pushary.com/api/v1/server' })
     await tool.execute({ externalId: 'victim_user' } as never, ctxWithPrincipal('someone_else'))
     expect(calls[0].body?.externalId).toBe('fixed_user')
+  })
+})
+
+describe('parseAskInput', () => {
+  it('reads a well-formed input', () => {
+    expect(parseAskInput({ question: 'Ship it?', type: 'select', options: ['a', 'b'] })).toEqual({
+      question: 'Ship it?',
+      type: 'select',
+      options: ['a', 'b'],
+    })
+  })
+
+  it('defaults type to confirm', () => {
+    expect(parseAskInput({ question: 'Ship it?' }).type).toBe('confirm')
+  })
+
+  it('rejects a type the model invented', () => {
+    expect(parseAskInput({ question: 'q', type: 'freeform' }).type).toBe('confirm')
+  })
+
+  it('drops non-string options rather than passing them through', () => {
+    expect(parseAskInput({ question: 'q', options: ['a', 3, null, 'b'] }).options).toEqual([
+      'a',
+      'b',
+    ])
+  })
+
+  it('omits options entirely when none survive', () => {
+    expect(parseAskInput({ question: 'q', options: [1, 2] }).options).toBeUndefined()
+  })
+
+  it('survives a non-object input', () => {
+    expect(parseAskInput(null)).toEqual({ question: '', type: 'confirm' })
+    expect(parseAskInput('nope')).toEqual({ question: '', type: 'confirm' })
   })
 })

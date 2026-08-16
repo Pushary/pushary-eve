@@ -41,6 +41,44 @@ export default pusharyConnectPhone()
 
 That is it. The agent now has `ask-human` (approve / choose / free-text, delivered to a phone, blocks until answered) and `connect-phone` (returns the one-tap connect link).
 
+## Gating a tool the model cannot skip
+
+`pusharyAskHuman()` is a tool the model chooses to call. That is right for "go ask
+someone about this", and wrong for "this must not happen without a yes", because a
+model that does not want to be interrupted can decline to call it.
+
+For an enforced gate, use `pusharyApproval()` in Eve's own per-tool `approval:`
+field. Eve evaluates it before `execute` runs, so there is no path around it:
+
+```ts
+// agent/tools/issue-refund.ts
+import { defineTool } from 'eve/tools'
+import { pusharyApproval } from '@pushary/eve'
+
+export default defineTool({
+  name: 'issue_refund',
+  inputSchema: z.object({ amount: z.number(), customer: z.string() }),
+  approval: pusharyApproval(),
+  execute: async ({ amount }) => refund(amount),
+})
+```
+
+It sits alongside Eve's built-in `always()`, `never()` and `once()`, which decide
+statically. This one asks a person and waits for the answer.
+
+Fail-closed: a denial, an expiry, or nobody answering all come back denied and the
+tool does not run. The decision is keyed on session, call and tool, so a replayed
+turn resolves to the same decision instead of asking twice.
+
+For a multi-tenant product, resolve the end-user per call:
+
+```ts
+approval: pusharyApproval({ externalId: (ctx) => ctx.toolInput?.customer })
+```
+
+`pusharyApproval<TInput>()` is generic over your tool's input, so `ctx.toolInput` is
+typed inside that callback.
+
 ## The channel
 
 The tools above are for asking on purpose. The channel covers everything Eve already pauses on: any tool gated with `approval` from `eve/tools/approval`, and the built-in `ask_question`. Eve renders those as buttons in Slack. This renders them on a phone.

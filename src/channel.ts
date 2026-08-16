@@ -166,7 +166,7 @@ const routingIsValid = (
 export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
   defineChannel({
     routes: [
-      POST(ROUTE_ANSWER, async (req, { send }) => {
+      POST(ROUTE_ANSWER, async (req, { from }) => {
         const secret = resolveWebhookSecret(config)
         const rawBody = await req.text()
         if (!verifyWebhookSignature(rawBody, req.headers.get(SIGNATURE_HEADER), secret)) {
@@ -201,13 +201,9 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
           : undefined
 
         try {
-          await send(
-            {
-              inputResponses: [
-                resolved ? { requestId, optionId: resolved } : { requestId, text: answer },
-              ],
-            },
-            { auth: null, continuationToken },
+          await from(continuationToken).respond(
+            [resolved ? { requestId, optionId: resolved } : { requestId, text: answer }],
+            { auth: null },
           )
         } catch {
           // The session already moved on: the approval timed out, was answered
@@ -219,41 +215,38 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
         return Response.json({ ok: true })
       }),
 
-      POST(ROUTE_MESSAGE, async (req, { send }) => {
+      POST(ROUTE_MESSAGE, async (req, { from }) => {
         const body = (await req.json()) as { message?: string; externalId?: string }
         const externalId = body.externalId ?? config.externalId
         if (!body.message || !externalId) {
           return new Response('message and externalId are required', { status: 400 })
         }
-        const session = await send(body.message, {
+        const session = await from(externalId).send(body.message, {
           auth: {
             authenticator: 'pushary',
             principalType: 'user',
             principalId: externalId,
             attributes: {},
           },
-          continuationToken: externalId,
         })
         return Response.json({ sessionId: session.id })
       }),
 
-      POST(ROUTE_STOP, async (req, { cancel }) => {
+      POST(ROUTE_STOP, async (req, { from }) => {
         const body = (await req.json()) as { externalId?: string; turnId?: string }
         const externalId = body.externalId ?? config.externalId
         if (!externalId) return new Response('externalId is required', { status: 400 })
-        const result = await cancel({
-          continuationToken: externalId,
-          ...(body.turnId ? { turnId: body.turnId } : {}),
-        })
+        const result = await from(externalId).cancel(
+          body.turnId ? { turnId: body.turnId } : undefined,
+        )
         return Response.json(result)
       }),
 
-      POST(ROUTE_RESET, async (req, { reset }) => {
+      POST(ROUTE_RESET, async (req, { from }) => {
         const body = (await req.json()) as { externalId?: string; reason?: string }
         const externalId = body.externalId ?? config.externalId
         if (!externalId) return new Response('externalId is required', { status: 400 })
-        const result = await reset({
-          continuationToken: externalId,
+        const result = await from(externalId).reset({
           reason: body.reason ?? 'Reset from Pushary',
         })
         return Response.json(result)
@@ -262,9 +255,11 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
 
     events: {
       async 'input.requested'(data, channel, ctx) {
+        const token = channel.continuation?.token
+        if (!token) return
         await openDecisions(config, {
           requests: data.requests as readonly InputRequest[],
-          continuationToken: channel.continuationToken,
+          continuationToken: token,
           principalId:
             ctx.session.auth.current?.principalId ?? ctx.session.auth.initiator?.principalId,
         })

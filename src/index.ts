@@ -12,6 +12,15 @@ export {
   type InputRequest,
 } from './channel'
 
+export {
+  pusharyApproval,
+  defaultQuestion,
+  resolveApprovalExternalId,
+  type PusharyApprovalConfig,
+  type PusharyApprovalPolicy,
+  type ApprovalResolver,
+} from './approval'
+
 export interface PusharyEveConfig {
   /** Your Pushary API key. Defaults to `process.env.PUSHARY_API_KEY`. */
   readonly apiKey?: string
@@ -105,6 +114,34 @@ const CONNECT_INPUT_SCHEMA = {
   additionalProperties: false,
 }
 
+const DECISION_TYPES: readonly DecisionType[] = ['confirm', 'select', 'input']
+
+const isDecisionType = (value: unknown): value is DecisionType =>
+  typeof value === 'string' && (DECISION_TYPES as readonly string[]).includes(value)
+
+/** {@link AskInput} with the schema default for `type` already applied. */
+export interface ResolvedAskInput extends AskInput {
+  readonly type: DecisionType
+}
+
+/**
+ * Narrows the model's tool input to {@link ResolvedAskInput}. eve validates against
+ * `ASK_INPUT_SCHEMA` first, so this reads the validated shape rather than asserting
+ * one, and falls back to safe defaults for anything unexpected.
+ */
+export const parseAskInput = (input: unknown): ResolvedAskInput => {
+  const source: Record<string, unknown> =
+    typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+  const options = Array.isArray(source.options)
+    ? source.options.filter((option): option is string => typeof option === 'string')
+    : undefined
+  return {
+    question: typeof source.question === 'string' ? source.question : '',
+    type: isDecisionType(source.type) ? source.type : 'confirm',
+    ...(options && options.length > 0 ? { options } : {}),
+  }
+}
+
 const sessionPrincipal = (ctx: {
   readonly session: { readonly auth: { readonly current: { readonly principalId: string } | null; readonly initiator: { readonly principalId: string } | null } }
 }): string | undefined =>
@@ -126,8 +163,7 @@ export const pusharyAskHuman = (config: PusharyEveConfig = {}) =>
       'Ask a real human to approve, choose, or answer. Delivered to their phone and answered from the lock screen. Blocks until they reply. Use before any risky or irreversible action (spending money, deleting data, sending an external message) or when you need a human decision.',
     inputSchema: ASK_INPUT_SCHEMA,
     async execute(input, ctx) {
-      // Eve validates `input` against inputSchema before calling execute.
-      const { question, type = 'confirm', options } = input as unknown as AskInput
+      const { question, type, options } = parseAskInput(input)
       const client = createPusharyServer({ apiKey: resolveApiKey(config), baseUrl: config.baseUrl })
       const externalId = pickExternalId(config, sessionPrincipal(ctx))
       const result = await client.decisions.ask({
