@@ -1,5 +1,5 @@
 import type { ApprovalContext, ApprovalStatus } from 'eve/tools/approval'
-import { createPusharyServer, deterministicKey } from '@pushary/server'
+import { createAdapterKernel, renderApprovalQuestion } from '@pushary/server/adapters'
 
 /** Resolves a value from the approval context of a single tool call. */
 export type ApprovalResolver<TInput, TValue> = (ctx: ApprovalContext<TInput>) => TValue
@@ -37,22 +37,14 @@ export interface PusharyApprovalConfig<TInput = Record<string, unknown>> {
   readonly baseUrl?: string
 }
 
-const MAX_INPUT_CHARS = 300
+const kernel = createAdapterKernel('pusharyApproval()')
 
-const DENIED_UNANSWERED =
-  'No answer from the approver, so this was denied. Do not retry the same action.'
-const DENIED_REFUSED = 'The approver denied this action.'
+const sessionPrincipal = <TInput>(ctx: ApprovalContext<TInput>): string | undefined =>
+  ctx.session.auth.current?.principalId ?? ctx.session.auth.initiator?.principalId
 
 /** Renders `toolName` plus a truncated view of the tool input. */
-export const defaultQuestion = <TInput>(ctx: ApprovalContext<TInput>): string => {
-  const { toolInput } = ctx
-  if (toolInput === undefined || toolInput === null) return `Approve ${ctx.toolName}?`
-  const rendered = typeof toolInput === 'string' ? toolInput : JSON.stringify(toolInput)
-  if (rendered === undefined) return `Approve ${ctx.toolName}?`
-  const summary =
-    rendered.length > MAX_INPUT_CHARS ? `${rendered.slice(0, MAX_INPUT_CHARS)}...` : rendered
-  return `Approve ${ctx.toolName}? ${summary}`
-}
+export const defaultQuestion = <TInput>(ctx: ApprovalContext<TInput>): string =>
+  renderApprovalQuestion(ctx.toolName, ctx.toolInput)
 
 /** The configured end-user, else the session principal. Throws when neither exists. */
 export const resolveApprovalExternalId = <TInput>(
@@ -61,23 +53,7 @@ export const resolveApprovalExternalId = <TInput>(
 ): string => {
   const configured =
     typeof config.externalId === 'function' ? config.externalId(ctx) : config.externalId
-  const externalId =
-    configured ?? ctx.session.auth.current?.principalId ?? ctx.session.auth.initiator?.principalId
-  if (!externalId) {
-    throw new Error(
-      'Pushary: no end-user to ask. Pass { externalId } to pusharyApproval(), or run ' +
-        'user-scoped auth so the session principal is your end-user.',
-    )
-  }
-  return externalId
-}
-
-const requireApiKey = (apiKey: string | undefined): string => {
-  const resolved = apiKey ?? process.env.PUSHARY_API_KEY
-  if (!resolved) {
-    throw new Error('Pushary: set PUSHARY_API_KEY or pass { apiKey } to pusharyApproval().')
-  }
-  return resolved
+  return kernel.requireExternalId(configured ?? sessionPrincipal(ctx))
 }
 
 /**
@@ -100,25 +76,17 @@ const requireApiKey = (apiKey: string | undefined): string => {
 export const pusharyApproval = <TInput = Record<string, unknown>>(
   config: PusharyApprovalConfig<TInput> = {},
 ): PusharyApprovalPolicy<TInput> => {
-  const client = createPusharyServer({
-    apiKey: requireApiKey(config.apiKey),
-    ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
-  })
+  const gate = kernel.createGate(config)
   const buildQuestion = config.question ?? defaultQuestion
 
   return async (ctx: ApprovalContext<TInput>): Promise<ApprovalStatus> => {
-    const result = await client.decisions.ask({
+    const decision = await gate({
+      toolName: ctx.toolName,
+      callId: ctx.callId,
+      sessionId: ctx.session.id,
       question: buildQuestion(ctx),
-      type: 'confirm',
       externalId: resolveApprovalExternalId(config, ctx),
-      ...(config.agentName ? { agentName: config.agentName } : {}),
-      ...(config.expiresInSeconds ? { expiresInSeconds: config.expiresInSeconds } : {}),
-      ...(config.timeoutMs !== undefined ? { timeoutMs: config.timeoutMs } : {}),
-      ...(config.requireReachable ? { requireReachable: config.requireReachable } : {}),
-      idempotencyKey: deterministicKey([ctx.session.id, ctx.callId, ctx.toolName]),
     })
-
-    if (result.approved) return { type: 'approved' }
-    return { type: 'denied', reason: result.answered ? DENIED_REFUSED : DENIED_UNANSWERED }
+    return decision.approved ? { type: 'approved' } : { type: 'denied', reason: decision.reason }
   }
 }

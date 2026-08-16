@@ -6,5 +6,5 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: true,
-  external: ['eve', 'eve/tools', /^eve\//, 'zod', '@pushary/server'],
+  external: ['eve', 'eve/tools', /^eve\//, 'zod', '@pushary/server', /^@pushary\/server\//],
 })

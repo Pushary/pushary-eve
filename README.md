@@ -53,15 +53,19 @@ field. Eve evaluates it before `execute` runs, so there is no path around it:
 ```ts
 // agent/tools/issue-refund.ts
 import { defineTool } from 'eve/tools'
+import { z } from 'zod'
 import { pusharyApproval } from '@pushary/eve'
 
 export default defineTool({
-  name: 'issue_refund',
+  description: 'Refund an order',
   inputSchema: z.object({ amount: z.number(), customer: z.string() }),
   approval: pusharyApproval(),
   execute: async ({ amount }) => refund(amount),
 })
 ```
+
+Eve names a tool by its file path, so there is no `name` field; this one registers
+as `issue_refund`.
 
 It sits alongside Eve's built-in `always()`, `never()` and `once()`, which decide
 statically. This one asks a person and waits for the answer.
@@ -128,7 +132,7 @@ If there is no principal and no configured `externalId`, the tool throws a clear
 
 ## Under the hood
 
-Thin wrapper over [`@pushary/server`](https://www.npmjs.com/package/@pushary/server). The tools use `enroll` + `decisions.ask`; the channel uses `decisions.create` with a signed callback URL. Verified against `eve@0.27.8`. See the [adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
+Thin binding over the shared adapter kernel in [`@pushary/server`](https://www.npmjs.com/package/@pushary/server) (`@pushary/server/adapters`), which every Pushary framework adapter is built on. The tools use `enroll` + `decisions.ask`; the channel uses `decisions.create` with a signed callback URL; `pusharyApproval()` uses the kernel's fail-closed gate. Requires `eve@0.31` or newer. See the [adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
 
 MIT
 
