@@ -9,8 +9,30 @@ interface Recorded {
 }
 type Responder = (call: Recorded) => { status?: number; json: unknown }
 
+// What POST /authorize answers. The gate asks policy before it asks a person; this
+// suite is about the eve binding, so the default verdict is the one that still
+// reaches a human.
+const REQUIRES_HUMAN = {
+  verdict: 'requires_human',
+  policy: null,
+  reason: 'No policy rule names this action, so a person decides.',
+  authorizationId: null,
+}
+const ALLOWED = {
+  verdict: 'allow',
+  policy: 'issue_refund',
+  reason: 'Allowed by policy rule issue_refund.',
+  authorizationId: 'az_1',
+}
+
 const realFetch = globalThis.fetch
-const installFetch = (responders: readonly Responder[]): Recorded[] => {
+// The policy hop is answered but not recorded, so `calls` keeps meaning "the
+// decisions this adapter opened" and every assertion below reads as it did before
+// the gate consulted policy.
+const installFetch = (
+  responders: readonly Responder[],
+  evaluation: unknown = REQUIRES_HUMAN,
+): Recorded[] => {
   const calls: Recorded[] = []
   let i = 0
   globalThis.fetch = (async (input: unknown, init?: { method?: string; body?: string }) => {
@@ -18,6 +40,9 @@ const installFetch = (responders: readonly Responder[]): Recorded[] => {
       url: String(input),
       method: init?.method ?? 'GET',
       body: init?.body ? (JSON.parse(init.body) as Record<string, unknown>) : undefined,
+    }
+    if (call.url.endsWith('/authorize')) {
+      return { ok: true, status: 200, json: async () => evaluation } as Response
     }
     calls.push(call)
     const responder = responders[Math.min(i, responders.length - 1)]
@@ -70,6 +95,29 @@ describe('pusharyApproval', () => {
     installFetch([() => answered('yes')])
     const policy = pusharyApproval({ apiKey: 'pk_test.sk_test', timeoutMs: 0 })
     expect(await policy(ctx())).toEqual({ type: 'approved' })
+  })
+
+  it('approves without opening a decision when a rule allows the call', async () => {
+    const calls = installFetch([() => answered('yes')], ALLOWED)
+    const result = await pusharyApproval({ apiKey: 'pk_test.sk_test', timeoutMs: 0 })(ctx())
+    expect(result).toMatchObject({ type: 'approved' })
+    expect(calls).toHaveLength(0)
+  })
+
+  it('denies on a policy denial without asking anyone', async () => {
+    const calls = installFetch([() => answered('yes')], {
+      verdict: 'deny',
+      policy: 'issue_refund',
+      reason: 'Denied by policy rule issue_refund.',
+      authorizationId: 'az_1',
+    })
+    const result = (await pusharyApproval({ apiKey: 'pk_test.sk_test', timeoutMs: 0 })(ctx())) as {
+      type: string
+      reason: string
+    }
+    expect(result.type).toBe('denied')
+    expect(result.reason).toContain('Denied by policy rule issue_refund.')
+    expect(calls).toHaveLength(0)
   })
 
   it('denies when the human says no', async () => {

@@ -86,6 +86,9 @@ export const pusharyApproval = <TInput = Record<string, unknown>>(
       sessionId: ctx.session.id,
       question: buildQuestion(ctx),
       externalId: resolveApprovalExternalId(config, ctx),
+      // Lets a rule decide on the call's arguments and not only its name. The
+      // kernel bounds what it derives, and derives nothing it cannot carry whole.
+      input: ctx.toolInput,
     })
     return decision.approved ? { type: 'approved' } : { type: 'denied', reason: decision.reason }
   }

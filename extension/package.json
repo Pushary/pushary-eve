@@ -1,6 +1,6 @@
 {
   "name": "@pushary/eve-extension",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Pushary extension for Eve: ask a real human on their phone and block on a fail-closed answer.",
   "author": "Pushary <business@pushary.com>",
   "homepage": "https://pushary.com/human-in-the-loop-eve",
@@ -42,16 +42,16 @@
     "prepublishOnly": "npm run build && npm run typecheck"
   },
   "dependencies": {
-    "@pushary/eve": "^0.2.0",
+    "@pushary/eve": "^0.3.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "eve": "^0.27.8",
+    "eve": "^0.44.0",
     "typescript": "^5.0.0"
   },
   "peerDependencies": {
-    "eve": "*"
+    "eve": ">=0.31.0"
   },
   "publishConfig": {
     "access": "public"
