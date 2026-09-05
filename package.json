@@ -1,6 +1,6 @@
 {
   "name": "@pushary/eve",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Eve tools and a Pushary channel: pause your agent until a real human approves on their phone (human-in-the-loop).",
   "author": "Pushary <business@pushary.com>",
   "homepage": "https://pushary.com/human-in-the-loop-eve",
@@ -41,7 +41,7 @@
     "prepublishOnly": "npm run build && npm run typecheck"
   },
   "dependencies": {
-    "@pushary/server": "^1.4.0"
+    "@pushary/server": "^2.0.0"
   },
   "peerDependencies": {
     "eve": ">=0.31.0"
