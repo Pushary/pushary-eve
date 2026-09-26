@@ -1,6 +1,6 @@
 {
   "name": "@pushary/eve",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Phone approvals for Eve agents. Your agent asks, your user taps Approve or Deny.",
   "author": "Pushary <business@pushary.com>",
   "homepage": "https://pushary.com/human-in-the-loop-eve",

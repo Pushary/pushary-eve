@@ -1,6 +1,6 @@
 {
   "name": "@pushary/eve-extension",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Phone approvals for Eve agents, as an Eve extension. Your agent asks, your user taps Approve or Deny.",
   "author": "Pushary <business@pushary.com>",
   "homepage": "https://pushary.com/human-in-the-loop-eve",
