@@ -1,7 +1,7 @@
 {
   "name": "@pushary/eve-extension",
   "version": "0.1.4",
-  "description": "Pushary extension for Eve: ask a real human on their phone and block on a fail-closed answer.",
+  "description": "Phone approvals for Eve agents, as an Eve extension. Your agent asks, your user taps Approve or Deny.",
   "author": "Pushary <business@pushary.com>",
   "homepage": "https://pushary.com/human-in-the-loop-eve",
   "repository": {
@@ -64,7 +64,8 @@
     "human-in-the-loop",
     "hitl",
     "approval",
-    "agent"
+    "agent",
+    "tool-approval"
   ],
   "engines": {
     "node": ">=24"

@@ -1,29 +1,24 @@
 # @pushary/eve
 
+Phone approvals for [Eve](https://eve.dev) agents. Your agent asks, your user taps Approve or Deny.
+
+[Full walkthrough: Human-in-the-loop for Eve](https://pushary.com/human-in-the-loop-eve?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme)
+
 [![CI](https://github.com/Pushary/pushary-eve/actions/workflows/ci.yml/badge.svg)](https://github.com/Pushary/pushary-eve/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@pushary/eve)](https://www.npmjs.com/package/@pushary/eve)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Full walkthrough: [Human-in-the-loop for Eve](https://pushary.com/human-in-the-loop-eve?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme). Reaching your own end-users on their phones is the Pushary [Partner plan](https://pushary.com/human-in-the-loop?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
+## What you need
 
-Human-in-the-loop for [Eve](https://eve.dev). Give your agent a tool that pauses until a real human approves on their phone, answered from the lock screen.
+- A Pushary Partner plan, from $99 a month. [Start the trial](https://pushary.com/sign-up?from=agent&plan=partner&utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=partner-start).
+- An API key from [Partner onboarding](https://pushary.com/onboarding/partner), set as `PUSHARY_API_KEY`.
+- Your users install the free Pushary app ([iPhone](https://apps.apple.com/us/app/pushary/id6785677563), [Android](https://play.google.com/store/apps/details?id=com.pushary.app)). They never sign up or pay.
 
-Two calls is the whole integration:
-
-1. `pusharyConnectPhone()` returns a link the end-user taps once to connect their phone.
-2. `pusharyAskHuman()` asks that person and blocks until they answer, with a fail-closed result.
-
-Requires the Pushary [Partner plan](https://pushary.com/agent-notifications-integration?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
-
-## Install
+## Quick start
 
 ```bash
 npm i @pushary/eve
 ```
-
-Set `PUSHARY_API_KEY` (get it in your [dashboard](https://pushary.com/dashboard/settings)).
-
-## Use
 
 Eve discovers tools by file. Drop in two one-line files:
 
@@ -39,7 +34,11 @@ import { pusharyConnectPhone } from '@pushary/eve'
 export default pusharyConnectPhone()
 ```
 
-That is it. The agent now has `ask-human` (approve / choose / free-text, delivered to a phone, blocks until answered) and `connect-phone` (returns the one-tap connect link).
+That is it. The agent now has `ask-human` (approve, choose or type an answer on a phone, and wait for it) and `connect-phone` (returns the connect link).
+
+Two calls is the whole integration: `pusharyConnectPhone()` returns a link the end-user opens once to connect their phone, and `pusharyAskHuman()` asks that person and waits for the answer. No answer means no.
+
+Eve's own approval docs: [Multi-tenant approvals](https://eve.dev/docs/patterns/multi-tenant-approvals).
 
 ## Gating a tool the model cannot skip
 
@@ -74,14 +73,19 @@ Fail-closed: a denial, an expiry, or nobody answering all come back denied and t
 tool does not run. The decision is keyed on session, call and tool, so a replayed
 turn resolves to the same decision instead of asking twice.
 
-For a multi-tenant product, resolve the end-user per call:
+For a multi-tenant product, the person who answers is the signed-in user of the
+session. That is the default, and you can spell it out:
 
 ```ts
-approval: pusharyApproval({ externalId: (ctx) => ctx.toolInput?.customer })
+approval: pusharyApproval({ externalId: (ctx) => ctx.session.auth.current?.principalId })
 ```
 
+Never take the end-user from `ctx.toolInput`. The model writes the tool input, so a
+prompt injection could send the approval to a different customer. If your id for the
+user lives somewhere else, look it up on your server from the session.
+
 `pusharyApproval<TInput>()` is generic over your tool's input, so `ctx.toolInput` is
-typed inside that callback.
+typed inside a `question` builder.
 
 ## The channel
 
@@ -139,4 +143,3 @@ MIT
 ## Example
 
 A runnable example is in [`examples/`](examples).
-

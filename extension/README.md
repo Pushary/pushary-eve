@@ -1,18 +1,20 @@
 # @pushary/eve-extension
 
-Human-in-the-loop for [Eve](https://eve.dev), packaged as an Eve extension. One mount adds a tool that pauses the agent until a real human approves on their phone, answered from the lock screen.
+Phone approvals for [Eve](https://eve.dev) agents, as an Eve extension. Your agent asks, your user taps Approve or Deny.
 
-Full walkthrough: [Human-in-the-loop for Eve](https://pushary.com/human-in-the-loop-eve). Reaching your own end-users on their phones is the Pushary [Partner plan](https://pushary.com/human-in-the-loop).
+[Full walkthrough: Human-in-the-loop for Eve](https://pushary.com/human-in-the-loop-eve)
 
-## Install
+## What you need
+
+- A Pushary Partner plan, from $99 a month. [Start the trial](https://pushary.com/sign-up?from=agent&plan=partner).
+- An API key from [Partner onboarding](https://pushary.com/onboarding/partner), set as `PUSHARY_API_KEY`.
+- Your users install the free Pushary app ([iPhone](https://apps.apple.com/us/app/pushary/id6785677563), [Android](https://play.google.com/store/apps/details?id=com.pushary.app)). They never sign up or pay.
+
+## Quick start
 
 ```bash
 npm i @pushary/eve-extension
 ```
-
-Set `PUSHARY_API_KEY` (get it in your [dashboard](https://pushary.com/dashboard/settings)).
-
-## Use
 
 Mount it under `agent/extensions/`:
 
@@ -23,7 +25,9 @@ import pushary from '@pushary/eve-extension'
 export default pushary({})
 ```
 
-The filename supplies the namespace, so the agent gains `pushary__ask_human` (approve, choose, or free-text, delivered to a phone, blocks until answered) and `pushary__connect_phone` (returns the one-tap connect link).
+The filename supplies the namespace, so the agent gains `pushary__ask_human` (approve, choose or type an answer on a phone, and wait for it) and `pushary__connect_phone` (returns the connect link). Yes or no can be answered from the lock screen.
+
+Eve's own approval docs: [Multi-tenant approvals](https://eve.dev/docs/patterns/multi-tenant-approvals).
 
 ## Config
 
