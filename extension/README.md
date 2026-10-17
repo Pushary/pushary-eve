@@ -6,8 +6,8 @@ Phone approvals for [Eve](https://eve.dev) agents, as an Eve extension. Your age
 
 ## What you need
 
-- A Pushary Partner plan, from $99 a month. [Start the trial](https://pushary.com/sign-up?from=agent&plan=partner).
-- An API key from [Partner onboarding](https://pushary.com/onboarding/partner), set as `PUSHARY_API_KEY`.
+- A Pushary Partner plan, from $99 a month. [Start the trial](https://pushary.com/sign-up?from=agent&plan=partner&utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=partner-start).
+- An API key from [Partner onboarding](https://pushary.com/onboarding/partner?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=partner-start), set as `PUSHARY_API_KEY`.
 - Your users install the free Pushary app ([iPhone](https://apps.apple.com/us/app/pushary/id6785677563), [Android](https://play.google.com/store/apps/details?id=com.pushary.app)). They never sign up or pay.
 
 ## Quick start
