@@ -1,6 +1,6 @@
 {
   "name": "@pushary/eve-extension",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Phone approvals for Eve agents, as an Eve extension. Your agent asks, your user taps Approve or Deny.",
   "author": "Pushary <business@pushary.com>",
   "homepage": "https://pushary.com/human-in-the-loop-eve",
@@ -42,16 +42,16 @@
     "prepublishOnly": "npm run build && npm run typecheck"
   },
   "dependencies": {
-    "@pushary/eve": "^0.3.3",
+    "@pushary/eve": "^0.4.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "eve": "^0.44.0",
+    "eve": "^1.0.0-rc.6",
     "typescript": "^5.0.0"
   },
   "peerDependencies": {
-    "eve": ">=0.31.0"
+    "eve": ">=1.0.0-0"
   },
   "publishConfig": {
     "access": "public"
