@@ -103,7 +103,7 @@ PUSHARY_WEBHOOK_SECRET=whsec_...          # decisions.getWebhookSecret()
 PUSHARY_CALLBACK_ORIGIN=https://your-agent.vercel.app
 ```
 
-Eve emits `input.requested` and parks the turn durably. The channel opens a Pushary decision carrying a signed callback URL, and nothing is held open while it waits, so an approval can sit for hours at zero idle compute. When the human taps, `POST /pushary/answer` verifies the webhook signature and the per-request routing signature, then resumes the parked turn with the matching `inputResponses` entry.
+Eve emits `interaction.opened` for each approval or question and parks the turn durably. The channel opens a Pushary decision carrying a signed callback URL, and nothing is held open while it waits, so an approval can sit for hours at zero idle compute. When the human taps, `POST /pushary/answer` verifies the webhook signature and the per-request routing signature, then answers the parked interaction by its `interactionId`. A sign-in stays with the channel that started the session, because it finishes in a browser.
 
 Three more routes put the rest of the session on the phone:
 
@@ -111,7 +111,7 @@ Three more routes put the rest of the session on the phone:
 | --- | --- |
 | `POST /pushary/message` | Send a follow-up, starting a session if there is none |
 | `POST /pushary/stop` | `cancel()` the in-flight turn, leaving history intact |
-| `POST /pushary/reset` | `reset()` the session so the next message starts clean |
+| `POST /pushary/reset` | `end()` the session so the next message starts clean |
 
 Options are matched back by label and then by id, so an approval resolves to Eve's `approve` or `deny` and a select resolves to the option that was tapped. Each decision carries an idempotency key derived from the session and request id, so a replayed step never asks the same person twice. A stale answer, one whose session already moved on, returns `410` rather than failing the webhook.
 
@@ -136,7 +136,7 @@ If there is no principal and no configured `externalId`, the tool throws a clear
 
 ## Under the hood
 
-Thin binding over the shared adapter kernel in [`@pushary/server`](https://www.npmjs.com/package/@pushary/server) (`@pushary/server/adapters`), which every Pushary framework adapter is built on. The tools use `enroll` + `decisions.ask`; the channel uses `decisions.create` with a signed callback URL; `pusharyApproval()` uses the kernel's fail-closed gate. Requires `eve@0.31` or newer. See the [adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
+Thin binding over the shared adapter kernel in [`@pushary/server`](https://www.npmjs.com/package/@pushary/server) (`@pushary/server/adapters`), which every Pushary framework adapter is built on. The tools use `enroll` + `decisions.ask`; the channel uses `decisions.create` with a signed callback URL; `pusharyApproval()` uses the kernel's fail-closed gate. Requires eve 1.0 (`eve@>=1.0.0-0`, release candidates included). For eve 0.x, stay on `@pushary/eve@0.3`. See the [adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
 
 MIT
 

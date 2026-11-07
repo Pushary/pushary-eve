@@ -8,18 +8,53 @@ import {
   pusharyChannel,
   signRouting,
   openDecisions,
+  inputRequestFor,
 } from './channel'
 
 const APPROVAL = {
-  requestId: 'req_1',
+  interactionId: 'req_1',
   prompt: 'Refund charge ch_123 for $240?',
   display: 'confirmation' as const,
   options: [
     { id: 'approve', label: 'Approve' },
     { id: 'deny', label: 'Deny' },
   ],
-  action: { toolName: 'refund_charge', callId: 'call_1' },
 }
+
+describe('inputRequestFor', () => {
+  it('puts an approval on the phone with its options', () => {
+    expect(
+      inputRequestFor({
+        interactionId: 'req_1',
+        request: { kind: 'approval', prompt: APPROVAL.prompt, display: 'confirmation', options: APPROVAL.options },
+      }),
+    ).toEqual({ ...APPROVAL, allowFreeform: undefined })
+  })
+
+  it('puts a free-text question on the phone', () => {
+    expect(
+      inputRequestFor({
+        interactionId: 'q_1',
+        request: { kind: 'question', prompt: 'Which customer?', allowFreeform: true },
+      }),
+    ).toEqual({ interactionId: 'q_1', prompt: 'Which customer?', display: undefined, allowFreeform: true, options: undefined })
+  })
+
+  it('leaves a sign-in to the channel that started the session', () => {
+    expect(
+      inputRequestFor({ interactionId: 's_1', request: { kind: 'sign-in', prompt: 'Sign in to GitHub' } }),
+    ).toBeNull()
+  })
+
+  it('drops a display hint it does not know, so the decision type falls back to the options', () => {
+    const request = inputRequestFor({
+      interactionId: 'r_1',
+      request: { kind: 'approval', prompt: 'Ship it?', display: 'carousel', options: APPROVAL.options },
+    })
+    expect(request?.display).toBeUndefined()
+    expect(request && decisionTypeFor(request)).toBe('select')
+  })
+})
 
 describe('decisionTypeFor', () => {
   it('maps an approval to a confirm', () => {
@@ -92,7 +127,7 @@ const listen = (server: Server): Promise<number> =>
     resolve(typeof address === 'object' && address ? address.port : 0)
   }))
 
-describe('input.requested', () => {
+describe('interaction.opened', () => {
   it('opens a Pushary decision that can route the answer home', async () => {
     const received: { path: string; body: Record<string, unknown> }[] = []
     const server = createServer((req, res) => {
@@ -176,14 +211,14 @@ describe('pusharyChannel', () => {
     ])
   })
 
-  it('handles the input.requested event', () => {
+  it('handles the interaction.opened event', () => {
     const channel = pusharyChannel({
       apiKey: 'pk_test.sk_test',
       webhookSecret: 'whsec_test',
       callbackOrigin: 'https://agent.example.com',
     }) as unknown as { adapter: Record<string, unknown> }
 
-    expect(typeof channel.adapter['input.requested']).toBe('function')
+    expect(typeof channel.adapter['interaction.opened']).toBe('function')
   })
 })
 

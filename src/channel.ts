@@ -9,14 +9,25 @@ import {
 } from '@pushary/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 
-/** One pending input request as eve emits it on `input.requested`. */
+/** One pending request as eve emits it on `interaction.opened`. */
 export interface InputRequest {
-  readonly requestId: string
+  readonly interactionId: string
   readonly prompt: string
   readonly display?: 'confirmation' | 'select' | 'text'
   readonly allowFreeform?: boolean
   readonly options?: readonly { readonly id: string; readonly label: string }[]
-  readonly action: { readonly toolName: string; readonly callId: string }
+}
+
+/** What eve 1.0 puts on an `interaction.opened` event, as far as this channel reads it. */
+export interface OpenedInteraction {
+  readonly interactionId: string
+  readonly request: {
+    readonly kind: string
+    readonly prompt: string
+    readonly display?: string
+    readonly allowFreeform?: boolean
+    readonly options?: readonly { readonly id: string; readonly label: string }[]
+  }
 }
 
 export interface PusharyChannelConfig {
@@ -55,6 +66,28 @@ const ROUTE_ANSWER = '/pushary/answer'
 const ROUTE_MESSAGE = '/pushary/message'
 const ROUTE_STOP = '/pushary/stop'
 const ROUTE_RESET = '/pushary/reset'
+
+const SIGN_IN_KIND = 'sign-in'
+type RequestDisplay = NonNullable<InputRequest['display']>
+const REQUEST_DISPLAYS: readonly RequestDisplay[] = ['confirmation', 'select', 'text']
+
+const isRequestDisplay = (display: string | undefined): display is RequestDisplay =>
+  REQUEST_DISPLAYS.some((known) => known === display)
+
+const requestDisplayOf = (display: string | undefined): InputRequest['display'] =>
+  isRequestDisplay(display) ? display : undefined
+
+/** The request to put on a phone, or null for a kind a phone decision cannot answer. */
+export const inputRequestFor = (opened: OpenedInteraction): InputRequest | null => {
+  if (opened.request.kind === SIGN_IN_KIND) return null
+  return {
+    interactionId: opened.interactionId,
+    prompt: opened.request.prompt,
+    display: requestDisplayOf(opened.request.display),
+    allowFreeform: opened.request.allowFreeform,
+    options: opened.request.options,
+  }
+}
 
 const requireApiKey = (config: PusharyChannelConfig): string => {
   const key = config.apiKey ?? process.env.PUSHARY_API_KEY
@@ -122,7 +155,7 @@ export const decisionTypeFor = (request: InputRequest): DecisionType => {
  * "Approve" and "approve" both land on the `approve` option.
  */
 export const optionIdForAnswer = (
-  request: InputRequest,
+  request: Pick<InputRequest, 'options'>,
   answer: string,
 ): string | undefined => {
   const wanted = answer.trim().toLowerCase()
@@ -136,17 +169,17 @@ export const optionIdForAnswer = (
  * Routing params travel on the callback URL, so a parked approval needs no
  * server-side map and survives redeploys. Signed so only we can mint one.
  */
-export const signRouting = (secret: string, continuationToken: string, requestId: string): string =>
-  createHmac('sha256', secret).update(`${continuationToken}\x00${requestId}`).digest('hex')
+export const signRouting = (secret: string, continuationToken: string, interactionId: string): string =>
+  createHmac('sha256', secret).update(`${continuationToken}\x00${interactionId}`).digest('hex')
 
 const routingIsValid = (
   secret: string,
   continuationToken: string,
-  requestId: string,
+  interactionId: string,
   signature: string | null,
 ): boolean => {
   if (!signature) return false
-  const expected = Buffer.from(signRouting(secret, continuationToken, requestId))
+  const expected = Buffer.from(signRouting(secret, continuationToken, interactionId))
   const actual = Buffer.from(signature)
   if (expected.length !== actual.length) return false
   return timingSafeEqual(expected, actual)
@@ -178,12 +211,12 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
 
         const url = new URL(req.url)
         const continuationToken = url.searchParams.get('ct')
-        const requestId = url.searchParams.get('rid')
+        const interactionId = url.searchParams.get('rid')
         const optionId = url.searchParams.get('oid')
-        if (!continuationToken || !requestId) {
+        if (!continuationToken || !interactionId) {
           return new Response('missing routing params', { status: 400 })
         }
-        if (!routingIsValid(secret, continuationToken, requestId, url.searchParams.get('sig'))) {
+        if (!routingIsValid(secret, continuationToken, interactionId, url.searchParams.get('sig'))) {
           return new Response('invalid routing signature', { status: 401 })
         }
 
@@ -197,14 +230,14 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
             }[])
           : undefined
         const resolved = offered
-          ? optionIdForAnswer({ options: offered } as InputRequest, answer)
+          ? optionIdForAnswer({ options: offered }, answer)
           : undefined
 
         try {
-          await from(continuationToken).respond(
-            [resolved ? { requestId, optionId: resolved } : { requestId, text: answer }],
-            { auth: null },
-          )
+          const source = from(continuationToken)
+          await (resolved
+            ? source.respond([{ interactionId, optionId: resolved }], { auth: null })
+            : source.respond([{ interactionId, text: answer }], { auth: null }))
         } catch {
           // The session already moved on: the approval timed out, was answered
           // elsewhere, or the session was reset. Nothing to resume, and a retry
@@ -221,7 +254,7 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
         if (!body.message || !externalId) {
           return new Response('message and externalId are required', { status: 400 })
         }
-        const session = await from(externalId).send(body.message, {
+        const delivery = await from(externalId).send(body.message, {
           auth: {
             authenticator: 'pushary',
             principalType: 'user',
@@ -229,7 +262,7 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
             attributes: {},
           },
         })
-        return Response.json({ sessionId: session.id })
+        return Response.json({ sessionId: delivery.sessionId })
       }),
 
       POST(ROUTE_STOP, async (req, { from }) => {
@@ -246,7 +279,7 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
         const body = (await req.json()) as { externalId?: string; reason?: string }
         const externalId = body.externalId ?? config.externalId
         if (!externalId) return new Response('externalId is required', { status: 400 })
-        const result = await from(externalId).reset({
+        const result = await from(externalId).end({
           reason: body.reason ?? 'Reset from Pushary',
         })
         return Response.json(result)
@@ -254,11 +287,12 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
     ],
 
     events: {
-      async 'input.requested'(data, channel, ctx) {
-        const token = channel.continuation?.token
-        if (!token) return
+      async 'interaction.opened'({ data }, ctx) {
+        const request = inputRequestFor(data)
+        const token = ctx.channel.continuation?.token
+        if (!request || !token) return
         await openDecisions(config, {
-          requests: data.requests as readonly InputRequest[],
+          requests: [request],
           continuationToken: token,
           principalId:
             ctx.session.auth.current?.principalId ?? ctx.session.auth.initiator?.principalId,
@@ -293,8 +327,8 @@ export const openDecisions = async (
     const options = request.options ?? []
     const callbackUrl = new URL(`${origin}${ROUTE_ANSWER}`)
     callbackUrl.searchParams.set('ct', token)
-    callbackUrl.searchParams.set('rid', request.requestId)
-    callbackUrl.searchParams.set('sig', signRouting(secret, token, request.requestId))
+    callbackUrl.searchParams.set('rid', request.interactionId)
+    callbackUrl.searchParams.set('sig', signRouting(secret, token, request.interactionId))
     if (options.length > 0) {
       callbackUrl.searchParams.set(
         'oid',
@@ -312,7 +346,7 @@ export const openDecisions = async (
       ...(config.expiresInSeconds ? { expiresInSeconds: config.expiresInSeconds } : {}),
       ...(config.requireReachable ? { requireReachable: config.requireReachable } : {}),
       // Stable across replays, so a re-run of this step never asks twice.
-      idempotencyKey: deterministicKey([token, request.requestId]),
+      idempotencyKey: deterministicKey([token, request.interactionId]),
     })
   }
 }
