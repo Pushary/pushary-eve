@@ -103,7 +103,7 @@ PUSHARY_WEBHOOK_SECRET=whsec_...          # decisions.getWebhookSecret()
 PUSHARY_CALLBACK_ORIGIN=https://your-agent.vercel.app
 ```
 
-Eve emits `interaction.opened` for each approval or question and parks the turn durably. The channel opens a Pushary decision carrying a signed callback URL, and nothing is held open while it waits, so an approval can sit for hours at zero idle compute. When the human taps, `POST /pushary/answer` verifies the webhook signature and the per-request routing signature, then answers the parked interaction by its `interactionId`. A sign-in stays with the channel that started the session, because it finishes in a browser.
+Eve emits `interaction.opened` for each approval or question and parks the turn durably. The channel opens a Pushary decision carrying a signed callback URL, and nothing is held open while it waits, so an approval can sit for hours at zero idle compute. When the human taps, `POST /pushary/answer` verifies the webhook signature and the per-request routing signature, then answers the parked interaction by its `interactionId`. A sign-in stays with the channel that started the session, because it finishes in a browser, so a tool that needs a sign-in cannot finish in a session started through `/pushary/message`. The answer is sent to Eve as the person who raised the request, the identity Eve checks before it accepts a response. That holds even when someone else tapped: with `externalId` set to a manager, Eve records the requester as the responder, so a tool's `approval.response` policy, `ctx.approval.responder` and any token lookup see the requester. Do not use those to enforce that a second person approved. Pushary's own record names who really answered. A signed answer is tied to its request by the callback URL and not by the answer itself, so someone who captured a signed callback and held the URL of another open request could replay it there. Keep callback traffic and logs private, as you would the webhook secret.
 
 Three more routes put the rest of the session on the phone:
 
@@ -112,6 +112,8 @@ Three more routes put the rest of the session on the phone:
 | `POST /pushary/message` | Send a follow-up, starting a session if there is none |
 | `POST /pushary/stop` | `cancel()` the in-flight turn, leaving history intact |
 | `POST /pushary/reset` | `end()` the session so the next message starts clean |
+
+These three routes do not authenticate the caller, and `/pushary/message` takes `externalId` from the request body. Put them behind your own auth before exposing them. Tools that need approval still go to the end-user's phone.
 
 Options are matched back by label and then by id, so an approval resolves to Eve's `approve` or `deny` and a select resolves to the option that was tapped. Each decision carries an idempotency key derived from the session and request id, so a replayed step never asks the same person twice. A stale answer, one whose session already moved on, returns `410` rather than failing the webhook.
 

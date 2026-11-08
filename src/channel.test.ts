@@ -7,6 +7,7 @@ import {
   optionIdForAnswer,
   pusharyChannel,
   signRouting,
+  encodeRequester,
   openDecisions,
   inputRequestFor,
 } from './channel'
@@ -172,7 +173,7 @@ describe('interaction.opened', () => {
     expect(callback.searchParams.get('ct')).toBe('user_123')
     expect(callback.searchParams.get('rid')).toBe('req_1')
     expect(callback.searchParams.get('sig')).toBe(
-      signRouting('whsec_test', 'user_123', 'req_1'),
+      signRouting('whsec_test', 'user_123', 'req_1', null, callback.searchParams.get('oid')),
     )
 
     const offered = JSON.parse(
@@ -227,5 +228,104 @@ describe('webhook signature', () => {
     const body = JSON.stringify({ correlationId: 'dec_1', answer: 'Approve' })
     const expected = createHmac('sha256', 'whsec_test').update(body).digest('hex')
     expect(expected).toHaveLength(64)
+  })
+})
+
+describe('an answer arriving from the phone', () => {
+  const secret = 'whsec_test'
+  const token = 'user_123'
+  const interactionId = 'call_1'
+  const requester = { authenticator: 'pushary', principalType: 'user', principalId: 'user_123' }
+  const offered = Buffer.from(JSON.stringify(APPROVAL.options)).toString('base64url')
+
+  const answerRoute = () =>
+    (pusharyChannel({ apiKey: 'pk.sk', webhookSecret: secret, callbackOrigin: 'https://a.example' }) as unknown as {
+      routes: readonly { path: string; handler: (req: Request, ctx: unknown) => Promise<Response> }[]
+    }).routes.find((route) => route.path === '/pushary/answer')
+
+  const deliver = async (answer: string, encoded: string | null, signature?: string, options: string = offered) => {
+    const calls: { answers: unknown; options: unknown }[] = []
+    const body = JSON.stringify({ correlationId: 'dec_1', answer })
+    const url = new URL('https://a.example/pushary/answer')
+    url.searchParams.set('ct', token)
+    url.searchParams.set('rid', interactionId)
+    url.searchParams.set('oid', options)
+    if (encoded) url.searchParams.set('au', encoded)
+    url.searchParams.set('sig', signature ?? signRouting(secret, token, interactionId, encoded, options))
+    const request = new Request(url, {
+      method: 'POST',
+      body,
+      headers: { 'x-pushary-signature': createHmac('sha256', secret).update(body).digest('hex') },
+    })
+    const response = await answerRoute()?.handler(request, {
+      from: () => ({ respond: async (answers: unknown, options: unknown) => { calls.push({ answers, options }) } }),
+    })
+    return { calls, status: response?.status }
+  }
+
+  it.each([
+    ['yes', 'approve'],
+    ['Yes', 'approve'],
+    ['no', 'deny'],
+  ])('maps a %s tap on a confirmation to the %s option', (answer, optionId) => {
+    expect(optionIdForAnswer(APPROVAL, answer)).toBe(optionId)
+  })
+
+  it('never turns another answer into an approval', () => {
+    for (const answer of ['maybe', 'constructor', '']) expect(optionIdForAnswer(APPROVAL, answer)).toBeUndefined()
+  })
+
+  it('still prefers an option actually labelled yes', () => {
+    const options = [{ id: 'first', label: 'Yes' }, { id: 'approve', label: 'Approve' }]
+    expect(optionIdForAnswer({ options }, 'yes')).toBe('first')
+  })
+
+  it('answers as the requester, so eve admits the response', async () => {
+    const { calls, status } = await deliver('yes', encodeRequester(requester))
+    expect(status).toBe(200)
+    expect(calls).toEqual([{
+      answers: [{ interactionId, optionId: 'approve' }],
+      options: { auth: { ...requester, attributes: {} } },
+    }])
+  })
+
+  it('refuses a callback whose requester was changed after signing', async () => {
+    const signed = signRouting(secret, token, interactionId, encodeRequester(requester), offered)
+    const forged = encodeRequester({ ...requester, principalId: 'someone_else' })
+    const { calls, status } = await deliver('yes', forged, signed)
+    expect(status).toBe(401)
+    expect(calls).toEqual([])
+  })
+
+  it('sends no identity when the request carried no requester', async () => {
+    const { calls, status } = await deliver('Approve', null)
+    expect(status).toBe(200)
+    expect(calls).toEqual([{ answers: [{ interactionId, optionId: 'approve' }], options: { auth: null } }])
+  })
+
+  it('refuses a no whose offered options were changed so it means approve', async () => {
+    const encoded = encodeRequester(requester)
+    const signed = signRouting(secret, token, interactionId, encoded, offered)
+    const forged = Buffer.from(JSON.stringify([{ id: 'approve', label: 'no' }]), 'utf8').toString('base64url')
+    const { calls, status } = await deliver('no', encoded, signed, forged)
+    expect(status).toBe(401)
+    expect(calls).toEqual([])
+  })
+
+  it('refuses offered options added to a signature that never covered them', async () => {
+    const { calls, status } = await deliver('yes', null, signRouting(secret, token, interactionId))
+    expect(status).toBe(401)
+    expect(calls).toEqual([])
+  })
+
+  it('does not let a field slide into its neighbour', () => {
+    const encoded = encodeRequester(requester)
+    expect(signRouting(secret, token, `${interactionId}\x00${encoded}`)).not.toBe(signRouting(secret, token, interactionId, encoded))
+    expect(signRouting(secret, token, interactionId, `${encoded}\x00oid=${offered}`)).not.toBe(signRouting(secret, token, interactionId, encoded, offered))
+  })
+
+  it('does not mistake a signed requester for signed options', async () => {
+    const encoded = encodeRequester(requester)
+    expect(signRouting(secret, token, interactionId, encoded)).not.toBe(signRouting(secret, token, interactionId, null, encoded))
   })
 })

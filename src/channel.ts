@@ -67,6 +67,8 @@ const ROUTE_MESSAGE = '/pushary/message'
 const ROUTE_STOP = '/pushary/stop'
 const ROUTE_RESET = '/pushary/reset'
 
+const ROUTING_FIELD_SEPARATOR = '\x00'
+
 const SIGN_IN_KIND = 'sign-in'
 type RequestDisplay = NonNullable<InputRequest['display']>
 const REQUEST_DISPLAYS: readonly RequestDisplay[] = ['confirmation', 'select', 'text']
@@ -141,6 +143,11 @@ export const channelExternalId = (
   return id
 }
 
+const CONFIRM_ANSWER_OPTIONS: ReadonlyMap<string, string> = new Map([
+  ['yes', 'approve'],
+  ['no', 'deny'],
+])
+
 /** eve's request display maps onto a Pushary decision type. */
 export const decisionTypeFor = (request: InputRequest): DecisionType => {
   if (request.display === 'confirmation') return 'confirm'
@@ -162,28 +169,75 @@ export const optionIdForAnswer = (
   const byLabel = request.options?.find((o) => o.label.trim().toLowerCase() === wanted)
   if (byLabel) return byLabel.id
   const byId = request.options?.find((o) => o.id.trim().toLowerCase() === wanted)
-  return byId?.id
+  if (byId) return byId.id
+  const confirmOption = CONFIRM_ANSWER_OPTIONS.get(wanted)
+  return request.options?.find((o) => o.id === confirmOption)?.id
 }
 
 /**
  * Routing params travel on the callback URL, so a parked approval needs no
  * server-side map and survives redeploys. Signed so only we can mint one.
  */
-export const signRouting = (secret: string, continuationToken: string, interactionId: string): string =>
-  createHmac('sha256', secret).update(`${continuationToken}\x00${interactionId}`).digest('hex')
+export const signRouting = (
+  secret: string,
+  continuationToken: string,
+  interactionId: string,
+  requester?: string | null,
+  offeredOptions?: string | null,
+): string =>
+  createHmac('sha256', secret)
+    .update(requester || offeredOptions
+      ? JSON.stringify([continuationToken, interactionId, requester ?? null, offeredOptions ?? null])
+      : [continuationToken, interactionId].join(ROUTING_FIELD_SEPARATOR))
+    .digest('hex')
 
 const routingIsValid = (
   secret: string,
   continuationToken: string,
   interactionId: string,
+  requester: string | null,
+  offeredOptions: string | null,
   signature: string | null,
 ): boolean => {
   if (!signature) return false
-  const expected = Buffer.from(signRouting(secret, continuationToken, interactionId))
+  const expected = Buffer.from(signRouting(secret, continuationToken, interactionId, requester, offeredOptions))
   const actual = Buffer.from(signature)
   if (expected.length !== actual.length) return false
   return timingSafeEqual(expected, actual)
 }
+
+/** Who raised the request, the fields eve compares when an answer arrives. */
+export interface RequesterPrincipal {
+  readonly authenticator: string
+  readonly issuer?: string
+  readonly principalType: string
+  readonly principalId: string
+}
+
+const isRequesterPrincipal = (value: unknown): value is RequesterPrincipal => {
+  if (typeof value !== 'object' || value === null) return false
+  const principal = value as Record<string, unknown>
+  return typeof principal.authenticator === 'string'
+    && typeof principal.principalType === 'string'
+    && typeof principal.principalId === 'string'
+    && (principal.issuer === undefined || typeof principal.issuer === 'string')
+}
+
+export const encodeRequester = ({ authenticator, issuer, principalType, principalId }: RequesterPrincipal): string =>
+  Buffer.from(JSON.stringify({ authenticator, issuer, principalType, principalId }), 'utf8').toString('base64url')
+
+const decodeRequester = (encoded: string | null): RequesterPrincipal | null => {
+  if (!encoded) return null
+  try {
+    const decoded: unknown = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))
+    return isRequesterPrincipal(decoded) ? decoded : null
+  } catch {
+    return null
+  }
+}
+
+const answerAuthFor = (requester: RequesterPrincipal | null) =>
+  requester === null ? null : { ...requester, attributes: {} }
 
 /**
  * A Pushary channel for eve. Every approval and `ask_question` the agent raises
@@ -216,7 +270,8 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
         if (!continuationToken || !interactionId) {
           return new Response('missing routing params', { status: 400 })
         }
-        if (!routingIsValid(secret, continuationToken, interactionId, url.searchParams.get('sig'))) {
+        const encodedRequester = url.searchParams.get('au')
+        if (!routingIsValid(secret, continuationToken, interactionId, encodedRequester, optionId, url.searchParams.get('sig'))) {
           return new Response('invalid routing signature', { status: 401 })
         }
 
@@ -235,9 +290,10 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
 
         try {
           const source = from(continuationToken)
+          const auth = answerAuthFor(decodeRequester(encodedRequester))
           await (resolved
-            ? source.respond([{ interactionId, optionId: resolved }], { auth: null })
-            : source.respond([{ interactionId, text: answer }], { auth: null }))
+            ? source.respond([{ interactionId, optionId: resolved }], { auth })
+            : source.respond([{ interactionId, text: answer }], { auth }))
         } catch {
           // The session already moved on: the approval timed out, was answered
           // elsewhere, or the session was reset. Nothing to resume, and a retry
@@ -296,6 +352,7 @@ export const pusharyChannel = (config: PusharyChannelConfig = {}) =>
           continuationToken: token,
           principalId:
             ctx.session.auth.current?.principalId ?? ctx.session.auth.initiator?.principalId,
+          requester: ctx.session.auth.current ?? ctx.session.auth.initiator ?? null,
         })
       },
     },
@@ -312,6 +369,7 @@ export const openDecisions = async (
     readonly requests: readonly InputRequest[]
     readonly continuationToken: string
     readonly principalId: string | undefined
+    readonly requester?: RequesterPrincipal | null
   },
 ): Promise<void> => {
   const client = createPusharyServer({
@@ -328,13 +386,13 @@ export const openDecisions = async (
     const callbackUrl = new URL(`${origin}${ROUTE_ANSWER}`)
     callbackUrl.searchParams.set('ct', token)
     callbackUrl.searchParams.set('rid', request.interactionId)
-    callbackUrl.searchParams.set('sig', signRouting(secret, token, request.interactionId))
-    if (options.length > 0) {
-      callbackUrl.searchParams.set(
-        'oid',
-        Buffer.from(JSON.stringify(options), 'utf8').toString('base64url'),
-      )
-    }
+    const requester = input.requester ? encodeRequester(input.requester) : null
+    if (requester) callbackUrl.searchParams.set('au', requester)
+    const offeredOptions = options.length > 0
+      ? Buffer.from(JSON.stringify(options), 'utf8').toString('base64url')
+      : null
+    if (offeredOptions) callbackUrl.searchParams.set('oid', offeredOptions)
+    callbackUrl.searchParams.set('sig', signRouting(secret, token, request.interactionId, requester, offeredOptions))
 
     await client.decisions.create({
       question: request.prompt,
