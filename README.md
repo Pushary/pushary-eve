@@ -14,6 +14,14 @@ Phone approvals for [Eve](https://eve.dev) agents. Your agent asks, your user ta
 - An API key from [Partner onboarding](https://pushary.com/onboarding/partner?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=partner-start), set as `PUSHARY_API_KEY`.
 - Your users install the free Pushary app ([iPhone](https://apps.apple.com/us/app/pushary/id6785677563), [Android](https://play.google.com/store/apps/details?id=com.pushary.app)). They never sign up or pay.
 
+## What your customer gets
+
+1. They open your connect link once. It shows your product's name and logo and connects their phone.
+2. When your Eve agent parks on an approval or a question, a push notification titled with your product name arrives, such as **Acme needs your approval**. With the channel, the turn waits without holding compute, for hours if needed.
+3. They approve or decline, pick an option or type an answer. A decline, an expired question or no answer at all keeps the tool from running.
+
+Pushary hosts the phone delivery, the decision record and the [audit log](https://pushary.com/docs/agents/audit-log?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme). Eve keeps the parked turn. Your app keeps its own sign-in, the session principal and the tools themselves.
+
 ## Quick start
 
 ```bash
@@ -138,10 +146,18 @@ If there is no principal and no configured `externalId`, the tool throws a clear
 
 ## Under the hood
 
-Thin binding over the shared adapter kernel in [`@pushary/server`](https://www.npmjs.com/package/@pushary/server) (`@pushary/server/adapters`), which every Pushary framework adapter is built on. The tools use `enroll` + `decisions.ask`; the channel uses `decisions.create` with a signed callback URL; `pusharyApproval()` uses the kernel's fail-closed gate. Requires eve 1.0 (`eve@>=1.0.0-0`, release candidates included). For eve 0.x, stay on `@pushary/eve@0.3`. See the [adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
+Thin binding over the shared adapter kernel in [`@pushary/server`](https://www.npmjs.com/package/@pushary/server) (`@pushary/server/adapters`), which every Pushary framework adapter is built on. The tools use `enroll` + `decisions.ask`; the channel uses `decisions.create` with a signed callback URL; `pusharyApproval()` uses the kernel's fail-closed gate. Requires eve 1.0 (`eve@>=1.0.0-0`, release candidates included) and Node.js 24 or later. For eve 0.x, stay on `@pushary/eve@0.3`. See the [adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
 
 MIT
 
 ## Example
 
 A runnable example is in [`examples/`](examples).
+
+## Links
+
+- [Human in the loop for Eve](https://pushary.com/human-in-the-loop-eve?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme): what your customer sees, with the full example.
+- [Eve section of the adapters guide](https://pushary.com/docs/agents/adapters?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme#eve) in the Pushary docs.
+- [Partner plan](https://pushary.com/partners?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme), from $99 a month. All plans are on the [pricing page](https://pushary.com/pricing?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme).
+- [Browser demo](https://pushary.com/try?utm_source=github&utm_medium=oss-adapter&utm_campaign=pushary-eve&utm_content=readme) of one approval.
+- Other adapters: [Vercel AI SDK](https://github.com/Pushary/pushary-ai-sdk), [Mastra](https://github.com/Pushary/pushary-mastra), [durable workflows](https://github.com/Pushary/pushary-durable).
